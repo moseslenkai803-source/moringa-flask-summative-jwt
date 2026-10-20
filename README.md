@@ -43,6 +43,19 @@ pipenv install
 
 If the project uses a committed `Pipfile.lock`, Pipenv will use it to resolve the locked dependencies.
 
+## Environment Configuration
+
+The application supports these environment variables:
+
+- `SECRET_KEY`: Flask application secret.
+- `JWT_SECRET_KEY`: secret used to sign JWTs.
+- `DATABASE_URL`: database connection URI. Defaults to `sqlite:///workout_tracker.db`.
+
+When these variables are not set, the application uses development defaults.
+Do not use those defaults in production. Set strong, unique secret values
+through environment variables when deploying, and never commit production
+secrets to Git.
+
 ## Database Setup
 
 Apply the database migrations:
@@ -72,7 +85,7 @@ The API will normally be available at:
 ## API Endpoints
 
 | Method | Endpoint | Description | Authentication |
-|---|---|---|---|
+
 | GET | `/` | Home route | No |
 | POST | `/signup` | Register a user | No |
 | POST | `/login` | Log in and obtain a JWT | No |
