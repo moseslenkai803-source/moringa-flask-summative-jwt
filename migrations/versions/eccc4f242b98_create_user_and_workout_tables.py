@@ -1,7 +1,7 @@
 """Create user and workout tables
 
 Revision ID: eccc4f242b98
-Revises: 
+Revises:
 Create Date: 2026-10-20 17:20:36.452072
 
 """
