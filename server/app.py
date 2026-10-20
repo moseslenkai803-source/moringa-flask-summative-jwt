@@ -3,7 +3,7 @@ from flask_jwt_extended import (create_access_token, jwt_required, get_jwt_ident
 
 from server import bcrypt, db, jwt, migrate, models
 from server.config import Config
-from server.models import User
+from server.models import User, Workout
 
 
 def create_app(test_config=None):
@@ -99,6 +99,189 @@ def create_app(test_config=None):
             "id": user.id,
             "username": user.username
         }), 200
+
+    @app.route("/workouts", methods=["POST"])
+    @jwt_required()
+    def create_workout():
+        data = request.get_json()
+
+        if not data:
+            return jsonify({"errors": ["Request body must be JSON"]}), 400
+
+        activity = data.get("activity")
+        duration = data.get("duration_minutes")
+
+        if not activity or duration is None:
+            return jsonify({
+                "errors": ["Activity and duration_minutes are required"]
+            }), 400
+
+        if not isinstance(duration, int) or isinstance(duration, bool) or duration <= 0:
+            return jsonify({
+                "errors": ["duration_minutes must be a positive integer"]
+            }), 400
+
+        user_id = int(get_jwt_identity())
+
+        workout = Workout(
+            activity=activity,
+            duration_minutes=duration,
+            user_id=user_id
+        )
+
+        db.session.add(workout)
+        db.session.commit()
+
+        return jsonify({
+            "id": workout.id,
+            "activity": workout.activity,
+            "duration_minutes": workout.duration_minutes,
+            "user_id": workout.user_id
+        }), 201
+
+    @app.route("/workouts", methods=["GET"])
+    @jwt_required()
+    def get_workouts():
+        user_id = int(get_jwt_identity())
+
+        page = request.args.get("page", 1, type=int)
+        per_page = request.args.get("per_page", 10, type=int)
+
+        if page < 1 or per_page < 1:
+            return jsonify({
+                "errors": ["page and per_page must be positive integers"]
+            }), 400
+
+        per_page = min(per_page, 100)
+
+        pagination = Workout.query.filter_by(
+            user_id=user_id
+        ).order_by(Workout.id).paginate(
+            page=page,
+            per_page=per_page,
+            error_out=False
+        )
+
+        workouts = [
+            {
+                "id": workout.id,
+                "activity": workout.activity,
+                "duration_minutes": workout.duration_minutes,
+                "user_id": workout.user_id,
+            }
+            for workout in pagination.items
+        ]
+
+        return jsonify({
+            "workouts": workouts,
+            "pagination": {
+                "page": pagination.page,
+                "per_page": pagination.per_page,
+                "total": pagination.total,
+                "pages": pagination.pages,
+            },
+        }), 200
+
+    @app.route("/workouts/<int:workout_id>", methods=["GET"])
+    @jwt_required()
+    def get_workout(workout_id):
+        user_id = int(get_jwt_identity())
+
+        workout = Workout.query.filter_by(
+            id=workout_id,
+            user_id=user_id
+        ).first()
+
+        if workout is None:
+            return jsonify({"errors": ["Workout not found"]}), 404
+
+        return jsonify({
+            "id": workout.id,
+            "activity": workout.activity,
+            "duration_minutes": workout.duration_minutes,
+            "user_id": workout.user_id
+        }), 200
+
+    @app.route("/workouts/<int:workout_id>", methods=["PATCH"])
+    @jwt_required()
+    def update_workout(workout_id):
+        user_id = int(get_jwt_identity())
+
+        workout = Workout.query.filter_by(
+            id=workout_id,
+            user_id=user_id
+        ).first()
+
+        if workout is None:
+            return jsonify({"errors": ["Workout not found"]}), 404
+
+        data = request.get_json()
+
+        if not isinstance(data, dict) or not data:
+            return jsonify({
+                "errors": ["Provide a non-empty JSON object"]
+            }), 400
+
+        allowed_fields = {"activity", "duration_minutes"}
+
+        if not set(data.keys()).issubset(allowed_fields):
+            return jsonify({
+                "errors": ["Only activity and duration_minutes can be updated"]
+            }), 400
+
+        if "activity" in data:
+            activity = data["activity"]
+
+            if not isinstance(activity, str) or not activity.strip():
+                return jsonify({
+                    "errors": ["activity must be a non-empty string"]
+                }), 400
+
+            workout.activity = activity.strip()
+
+        if "duration_minutes" in data:
+            duration = data["duration_minutes"]
+
+            if (
+                not isinstance(duration, int)
+                or isinstance(duration, bool)
+                or duration <= 0
+            ):
+                return jsonify({
+                    "errors": ["duration_minutes must be a positive integer"]
+                }), 400
+
+            workout.duration_minutes = duration
+
+        db.session.commit()
+
+        return jsonify({
+            "id": workout.id,
+            "activity": workout.activity,
+            "duration_minutes": workout.duration_minutes,
+            "user_id": workout.user_id
+        }), 200
+
+
+    @app.route("/workouts/<int:workout_id>", methods=["DELETE"])
+    @jwt_required()
+    def delete_workout(workout_id):
+        user_id = int(get_jwt_identity())
+
+        workout = Workout.query.filter_by(
+            id=workout_id,
+            user_id=user_id
+        ).first()
+
+        if workout is None:
+            return jsonify({"errors": ["Workout not found"]}), 404
+
+        db.session.delete(workout)
+        db.session.commit()
+
+        return "", 204
+
+
     
     return app
 if __name__ == "__main__":
